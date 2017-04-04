@@ -35,7 +35,6 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -59,7 +58,6 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.WriteBufferWaterMark;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.base64.Base64;
@@ -67,7 +65,6 @@ import io.netty.handler.ssl.ApplicationProtocolNames;
 import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.handler.timeout.WriteTimeoutHandler;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import io.netty.resolver.NoopAddressResolverGroup;
 import io.netty.util.concurrent.DefaultPromise;
@@ -134,7 +131,6 @@ public class ApnsClient {
     private volatile ProxyHandlerFactory proxyHandlerFactory;
     private final boolean shouldShutDownEventLoopGroup;
 
-    private long writeTimeoutMillis = DEFAULT_WRITE_TIMEOUT_MILLIS;
     private Long gracefulShutdownTimeoutMillis;
 
     private volatile ChannelPromise connectionReadyPromise;
@@ -150,13 +146,6 @@ public class ApnsClient {
     private final boolean useTokenAuthentication;
     private final Map<String, Set<String>> topicsByTeamId = new ConcurrentHashMap <>();
     private final Map<String, AuthenticationTokenSupplier> authenticationTokenSuppliersByTopic = new ConcurrentHashMap <>();
-
-    /**
-     * The default write timeout, in milliseconds.
-     *
-     * @since 0.6
-     */
-    public static final long DEFAULT_WRITE_TIMEOUT_MILLIS = 20_000;
 
     /**
      * The hostname for the production APNs gateway.
@@ -227,10 +216,6 @@ public class ApnsClient {
 
                 if (proxyHandlerFactory != null) {
                     pipeline.addFirst(proxyHandlerFactory.createProxyHandler());
-                }
-
-                if (ApnsClient.this.writeTimeoutMillis > 0) {
-                    pipeline.addLast(new WriteTimeoutHandler(ApnsClient.this.writeTimeoutMillis, TimeUnit.MILLISECONDS));
                 }
 
                 pipeline.addLast(sslContext.newHandler(channel.alloc()));
@@ -330,28 +315,6 @@ public class ApnsClient {
     protected void setProxyHandlerFactory(final ProxyHandlerFactory proxyHandlerFactory) {
         this.proxyHandlerFactory = proxyHandlerFactory;
         this.bootstrap.resolver(proxyHandlerFactory == null ? DefaultAddressResolverGroup.INSTANCE : NoopAddressResolverGroup.INSTANCE);
-    }
-
-    /**
-     * <p>Sets the write timeout for this client. If an attempt to send a notification to the APNs server takes longer
-     * than the given timeout, the connection will be closed (and automatically reconnected later). Note that write
-     * timeouts refer to the amount of time taken to <em>send</em> a notification to the server, and not the time taken
-     * by the server to process and respond to a notification.</p>
-     *
-     * <p>Write timeouts should generally be set before starting a connection attempt. Changes to a client's write
-     * timeout will take effect after the next connection attempt; changes made to an already-connected client will have
-     * no immediate effect.</p>
-     *
-     * <p>By default, clients have a write timeout of
-     * {@value com.relayrides.pushy.apns.ApnsClient#DEFAULT_WRITE_TIMEOUT_MILLIS} milliseconds.</p>
-     *
-     * @param writeTimeoutMillis the write timeout for this client in milliseconds; if zero, write attempts will never
-     * time out
-     *
-     * @since 0.6
-     */
-    protected void setWriteTimeout(final long writeTimeoutMillis) {
-        this.writeTimeoutMillis = writeTimeoutMillis;
     }
 
     /**

@@ -51,7 +51,6 @@ import io.netty.handler.codec.http2.Http2FrameAdapter;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.handler.timeout.WriteTimeoutException;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.PromiseCombiner;
@@ -369,15 +368,5 @@ class ApnsClientHandler extends Http2ConnectionHandler {
         }
 
         super.userEventTriggered(context, event);
-    }
-
-    @Override
-    public void exceptionCaught(final ChannelHandlerContext context, final Throwable cause) throws Exception {
-        if (cause instanceof WriteTimeoutException) {
-            log.debug("Closing connection due to write timeout.");
-            context.close();
-        } else {
-            log.warn("APNs client pipeline caught an exception.", cause);
-        }
     }
 }
