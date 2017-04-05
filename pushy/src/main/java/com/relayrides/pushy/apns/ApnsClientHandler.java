@@ -26,7 +26,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -68,10 +67,10 @@ class ApnsClientHandler extends Http2ConnectionHandler {
     private final String authority;
     private final boolean useTokenAuthentication;
 
-    private long nextPingId = new Random().nextLong();
     private ScheduledFuture<?> pingTimeoutFuture;
 
-    private static final int PING_TIMEOUT = 30; // seconds
+    static final int PING_IDLE_TIME_MILLIS = 60_000; // milliseconds
+    private static final int PING_TIMEOUT_MILLIS = PING_IDLE_TIME_MILLIS / 2;
 
     private static final String APNS_PATH_PREFIX = "/3/device/";
     private static final AsciiString APNS_EXPIRATION_HEADER = new AsciiString("apns-expiration");
@@ -337,32 +336,30 @@ class ApnsClientHandler extends Http2ConnectionHandler {
     @Override
     public void userEventTriggered(final ChannelHandlerContext context, final Object event) throws Exception {
         if (event instanceof IdleStateEvent) {
-            assert PING_TIMEOUT < ApnsClient.PING_IDLE_TIME_MILLIS;
-
             log.trace("Sending ping due to inactivity.");
 
-            final ByteBuf pingDataBuffer = context.alloc().ioBuffer(8, 8);
-            pingDataBuffer.writeLong(this.nextPingId++);
+            final ByteBuf pingDataBuffer = context.alloc().ioBuffer(Long.SIZE, Long.SIZE);
+            pingDataBuffer.writeLong(System.currentTimeMillis());
 
             this.encoder().writePing(context, false, pingDataBuffer, context.newPromise()).addListener(new GenericFutureListener<ChannelFuture>() {
 
                 @Override
                 public void operationComplete(final ChannelFuture future) throws Exception {
-                    if (future.isSuccess()) {
-                        ApnsClientHandler.this.pingTimeoutFuture = future.channel().eventLoop().schedule(new Runnable() {
-
-                            @Override
-                            public void run() {
-                                log.debug("Closing channel due to ping timeout.");
-                                future.channel().close();
-                            }
-                        }, PING_TIMEOUT, TimeUnit.SECONDS);
-                    } else {
+                    if (!future.isSuccess()) {
                         log.debug("Failed to write PING frame.", future.cause());
                         future.channel().close();
                     }
                 }
             });
+
+            this.pingTimeoutFuture = context.channel().eventLoop().schedule(new Runnable() {
+
+                @Override
+                public void run() {
+                    log.debug("Closing channel due to ping timeout.");
+                    context.channel().close();
+                }
+            }, PING_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
 
             this.flush(context);
         }

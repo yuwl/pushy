@@ -185,7 +185,6 @@ public class ApnsClient {
 
     private static final long INITIAL_RECONNECT_DELAY_SECONDS = 1; // second
     private static final long MAX_RECONNECT_DELAY_SECONDS = 60; // seconds
-    static final int PING_IDLE_TIME_MILLIS = 60_000; // milliseconds
 
     static final String EXPIRED_AUTH_TOKEN_REASON = "ExpiredProviderToken";
 
@@ -237,7 +236,7 @@ public class ApnsClient {
                                 }
                             }
 
-                            context.pipeline().addLast(new IdleStateHandler(0, 0, PING_IDLE_TIME_MILLIS, TimeUnit.MILLISECONDS));
+                            context.pipeline().addLast(new IdleStateHandler(0, 0, ApnsClientHandler.PING_IDLE_TIME_MILLIS, TimeUnit.MILLISECONDS));
                             context.pipeline().addLast(apnsClientHandler);
 
                             // Add this to the end of the queue so any events enqueued by the client handler happen
